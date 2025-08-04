@@ -320,7 +320,18 @@ class ASCIIRenderer:
         info_lines = []
         info_lines.append("=" * self.terminal_width)
         info_lines.append(f"ADS-B ASCII Radar - {datetime.utcnow().strftime('%H:%M:%S')} UTC")
-        info_lines.append(f"Aircraft tracked: {len(aircraft_list)}")
+        # Show display mode and aircraft count
+        # Use session-specific display mode if available
+        if hasattr(self, 'session_display_mode'):
+            display_mode = self.session_display_mode[0]
+        else:
+            display_mode = DISPLAY_CONFIG.get('display_mode', 'all')
+            
+        if display_mode == 'closest':
+            limit = DISPLAY_CONFIG.get('display_aircraft_limit', 10)
+            info_lines.append(f"Aircraft tracked: {len(aircraft_list)} (showing closest {limit})")
+        else:
+            info_lines.append(f"Aircraft tracked: {len(aircraft_list)} (showing all)")
         
         bounds = self.map_bounds
         info_lines.append(f"Bounds: {bounds['lat_min']:.2f},{bounds['lon_min']:.2f} to "
@@ -336,7 +347,7 @@ class ASCIIRenderer:
         
         # Add hotkeys
         info_lines.append("")
-        info_lines.append("Hotkeys: (r)efresh, (q)uit")
+        info_lines.append("Hotkeys: (r)efresh, (t)oggle display mode, (q)uit")
         info_lines.append("")
         
         # Show some aircraft details

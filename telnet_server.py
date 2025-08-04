@@ -69,7 +69,7 @@ async def reader_task(reader, queue):
             await queue.put(None) # Signal EOF
             break
 
-async def handle_input(queue, app, on_reset):
+async def handle_input(queue, app, on_reset, force_update, session_display_mode):
     """Handles user input from the queue."""
     global _server
     while app.running:
@@ -88,6 +88,12 @@ async def handle_input(queue, app, on_reset):
                 elif key == 'r':
                     print("Refreshing display, re-detecting terminal size, and clearing trails...")
                     await on_reset(clear_trails=True, refresh_display=True)
+                elif key == 't':
+                    # Toggle display mode for this session only
+                    session_display_mode[0] = 'closest' if session_display_mode[0] == 'all' else 'all'
+                    print(f"Display mode changed to: {session_display_mode[0].upper()} (session-specific)")
+                    # Force screen update
+                    force_update.set()
         except asyncio.TimeoutError:
             continue
 
@@ -176,6 +182,9 @@ async def shell(speed, reader, writer):
 
     # --- App Setup ---
     print(f"Final terminal size: width={terminal_width}, height={terminal_height}")
+    # Session-specific display mode (use list to make it mutable)
+    session_display_mode = ['all']  # Default to showing all aircraft
+    
     DISPLAY_CONFIG.update({
         'terminal_width': terminal_width,
         'terminal_height': terminal_height,
@@ -224,6 +233,8 @@ async def shell(speed, reader, writer):
     
     # Create renderer and app AFTER setting map bounds
     renderer = ASCIIRenderer()
+    # Store session display mode in renderer for info panel
+    renderer.session_display_mode = session_display_mode
     app = ADSBRadarApp(demo_mode=config.get('demomode', True))
     app.speed_multiplier = speed
     app.set_update_interval(config.get('interval', 1))
@@ -394,7 +405,7 @@ async def shell(speed, reader, writer):
     await reset_aircraft(clear_trails=True)
 
     # Start input handler
-    input_task = asyncio.create_task(handle_input(input_queue, app, reset_aircraft))
+    input_task = asyncio.create_task(handle_input(input_queue, app, reset_aircraft, force_update, session_display_mode))
 
     # --- Main Loop ---
     writer.write("\x1b[2J\x1b[1;1H\x1b[?25l")
@@ -464,13 +475,35 @@ async def shell(speed, reader, writer):
             if current_aircraft:
                 if app.demo_mode:
                     app._animate_demo_aircraft(current_aircraft)
+                
+                # Filter aircraft based on session-specific display mode
+                if session_display_mode[0] == 'closest' and airport_info:
+                    # Sort by distance and take only the closest
+                    from adsb_data import calculate_distance
+                    airport_lat = airport_info['lat']
+                    airport_lon = airport_info['lon']
+                    limit = DISPLAY_CONFIG.get('display_aircraft_limit', 10)
+                    
+                    # Filter out aircraft without position data
+                    aircraft_with_pos = [a for a in current_aircraft if a.latitude is not None and a.longitude is not None]
+                    
+                    # Sort by distance to airport
+                    sorted_aircraft = sorted(aircraft_with_pos, 
+                                           key=lambda x: calculate_distance(airport_lat, airport_lon, x.latitude, x.longitude))
+                    
+                    # Take only the closest aircraft
+                    filtered_aircraft = sorted_aircraft[:limit]
+                else:
+                    # Show all aircraft
+                    filtered_aircraft = current_aircraft
+                
                 # Pass airport info to renderer
                 airport_display_info = {
                     'lat': airport_info['lat'],
                     'lon': airport_info['lon'],
                     'code': airport_code
                 } if airport_info else None
-                display_output = renderer.render_to_string(current_aircraft, show_info=True, airport_info=airport_display_info)
+                display_output = renderer.render_to_string(filtered_aircraft, show_info=True, airport_info=airport_display_info)
             else:
                 # No aircraft data
                 airport_display_info = {
@@ -480,8 +513,12 @@ async def shell(speed, reader, writer):
                 } if airport_info else None
                 display_output = renderer.render_to_string([], show_info=True, airport_info=airport_display_info)
             
-            for line in display_output.split('\n'):
+            lines = display_output.split('\n')
+            for i, line in enumerate(lines):
                 output_line = process_colored_line(line, terminal_width, config.get('use_colors', True))
+                # Don't add extra newline after the last line
+                if i == len(lines) - 1 and not line:
+                    continue
                 writer.write(output_line)
             await writer.drain()
 
