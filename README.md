@@ -51,6 +51,7 @@ telnet localhost 8023
 
 #### Telnet Server Hotkeys
 - `r` - Refresh display and clear trails
+- `t` - Toggle between showing all aircraft or only the closest aircraft
 - `q` - Quit current session
 - `x` or `s` - Shutdown the server completely
 
@@ -89,19 +90,19 @@ python main.py --interval 2
 
 Edit `config.py` to customize settings for your local area and preferences.
 
-## ADS-B Data Sources
+## Telnet Server Approach
 
-### Supported Sources
+The Telnet server mode allows remote connections to view and interact with the ASCII radar display. This mode is ideal for shared and remote environments.
 
-1. **dump1090** (most common)
-   - URL: `http://localhost:8080/data/aircraft.json`
-   - Raspberry Pi FlightAware installations
+### Features
 
-2. **RTL1090**
-   - URL: `http://localhost:31090/data/aircraft.json`
-
-3. **Virtual Radar Server**
-   - URL: `http://localhost:8080/VirtualRadar/AircraftList.json`
+- Start the server using `python telnet_server.py`.
+- Connect using any telnet client at `telnet localhost 8023`.
+- Control display with hotkeys:
+  - `r`: Refresh the display and clear trails.
+  - `t`: Toggle between displaying all aircraft and only the closest aircraft (default 10).
+  - `q`: Quit current session.
+  - `x` or `s`: Shutdown the server completely.
 
 ## Architecture
 
@@ -115,5 +116,9 @@ Edit `config.py` to customize settings for your local area and preferences.
 MIT License - feel free to modify and distribute!
 
 ---
+
+## Development Philosophy
+
+This project was developed with an AI-assisted "vibe coding" approach, allowing for creative and unconventional solutions. AI played a significant role in code suggestions and overall development style.
 
 **Happy plane spotting!** ✈️📡
