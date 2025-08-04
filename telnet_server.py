@@ -218,6 +218,8 @@ async def shell(speed, reader, writer):
             
             # Recreate renderer with new dimensions
             renderer = ASCIIRenderer()
+            # Restore session display mode reference
+            renderer.session_display_mode = session_display_mode
             
             # Force screen update
             force_update.set()
@@ -294,6 +296,8 @@ async def shell(speed, reader, writer):
             
             # Recreate renderer with new dimensions
             renderer = ASCIIRenderer()
+            # Restore session display mode reference
+            renderer.session_display_mode = session_display_mode
             
             # Clear trails as part of refresh
             clear_trails = True
@@ -435,6 +439,8 @@ async def shell(speed, reader, writer):
         
         # Recreate renderer with new dimensions
         renderer = ASCIIRenderer()
+        # Restore session display mode reference
+        renderer.session_display_mode = session_display_mode
         print("Renderer recreated with updated dimensions")
     last_data_update = time.time()
     last_keepalive = time.time()
@@ -522,6 +528,8 @@ async def shell(speed, reader, writer):
                     'lon': airport_info['lon'],
                     'code': airport_code
                 } if airport_info else None
+                # Store the total count before filtering for display purposes
+                renderer.total_aircraft_count = len(current_aircraft)
                 display_output = renderer.render_to_string(filtered_aircraft, show_info=True, airport_info=airport_display_info)
             else:
                 # No aircraft data
@@ -530,6 +538,7 @@ async def shell(speed, reader, writer):
                     'lon': airport_info['lon'],
                     'code': airport_code
                 } if airport_info else None
+                renderer.total_aircraft_count = 0
                 display_output = renderer.render_to_string([], show_info=True, airport_info=airport_display_info)
             
             lines = display_output.split('\n')

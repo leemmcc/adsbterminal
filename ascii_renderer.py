@@ -326,18 +326,22 @@ class ASCIIRenderer:
             display_mode = self.session_display_mode[0]
         else:
             display_mode = DISPLAY_CONFIG.get('display_mode', 'all')
-            
+        
+        # Get total aircraft count if available
+        total_count = getattr(self, 'total_aircraft_count', len(aircraft_list))
+        filtered_count = len(aircraft_list)
+        
         if display_mode == 'closest':
             limit = DISPLAY_CONFIG.get('display_aircraft_limit', 10)
-            info_lines.append(f"Aircraft tracked: {len(aircraft_list)} (showing closest {limit})")
+            info_lines.append(f"Aircraft tracked: {total_count} (showing closest {filtered_count} of {limit} max)")
         elif display_mode == 'high':
-            info_lines.append(f"Aircraft tracked: {len(aircraft_list)} (showing high altitude >25,000ft)")
+            info_lines.append(f"Aircraft tracked: {total_count} (showing {filtered_count} high altitude >25,000ft)")
         elif display_mode == 'medium':
-            info_lines.append(f"Aircraft tracked: {len(aircraft_list)} (showing medium altitude 10,000-25,000ft)")
+            info_lines.append(f"Aircraft tracked: {total_count} (showing {filtered_count} medium altitude 10,000-25,000ft)")
         elif display_mode == 'low':
-            info_lines.append(f"Aircraft tracked: {len(aircraft_list)} (showing low altitude <10,000ft)")
+            info_lines.append(f"Aircraft tracked: {total_count} (showing {filtered_count} low altitude <10,000ft)")
         else:
-            info_lines.append(f"Aircraft tracked: {len(aircraft_list)} (showing all)")
+            info_lines.append(f"Aircraft tracked: {total_count} (showing all)")
         
         bounds = self.map_bounds
         info_lines.append(f"Bounds: {bounds['lat_min']:.2f},{bounds['lon_min']:.2f} to "
