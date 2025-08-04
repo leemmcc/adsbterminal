@@ -90,7 +90,10 @@ async def handle_input(queue, app, on_reset, force_update, session_display_mode)
                     await on_reset(clear_trails=True, refresh_display=True)
                 elif key == 't':
                     # Toggle display mode for this session only
-                    session_display_mode[0] = 'closest' if session_display_mode[0] == 'all' else 'all'
+                    modes = ['all', 'closest', 'high', 'medium', 'low']
+                    current_idx = modes.index(session_display_mode[0])
+                    next_idx = (current_idx + 1) % len(modes)
+                    session_display_mode[0] = modes[next_idx]
                     print(f"Display mode changed to: {session_display_mode[0].upper()} (session-specific)")
                     # Force screen update
                     force_update.set()
@@ -477,7 +480,9 @@ async def shell(speed, reader, writer):
                     app._animate_demo_aircraft(current_aircraft)
                 
                 # Filter aircraft based on session-specific display mode
-                if session_display_mode[0] == 'closest' and airport_info:
+                mode = session_display_mode[0]
+                
+                if mode == 'closest' and airport_info:
                     # Sort by distance and take only the closest
                     from adsb_data import calculate_distance
                     airport_lat = airport_info['lat']
@@ -493,6 +498,20 @@ async def shell(speed, reader, writer):
                     
                     # Take only the closest aircraft
                     filtered_aircraft = sorted_aircraft[:limit]
+                elif mode in ['high', 'medium', 'low']:
+                    # Filter by altitude ranges
+                    # High: above 25,000 ft
+                    # Medium: 10,000 - 25,000 ft  
+                    # Low: below 10,000 ft
+                    filtered_aircraft = []
+                    for aircraft in current_aircraft:
+                        if aircraft.altitude is not None:
+                            if mode == 'high' and aircraft.altitude > 25000:
+                                filtered_aircraft.append(aircraft)
+                            elif mode == 'medium' and 10000 <= aircraft.altitude <= 25000:
+                                filtered_aircraft.append(aircraft)
+                            elif mode == 'low' and aircraft.altitude < 10000:
+                                filtered_aircraft.append(aircraft)
                 else:
                     # Show all aircraft
                     filtered_aircraft = current_aircraft

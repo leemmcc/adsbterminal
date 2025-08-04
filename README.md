@@ -51,7 +51,7 @@ telnet localhost 8023
 
 #### Telnet Server Hotkeys
 - `r` - Refresh display and clear trails
-- `t` - Toggle between showing all aircraft or only the closest aircraft
+- `t` - Toggle display mode (cycles through: all → closest → high → medium → low)
 - `q` - Quit current session
 - `x` or `s` - Shutdown the server completely
 
@@ -100,7 +100,12 @@ The Telnet server mode allows remote connections to view and interact with the A
 - Connect using any telnet client at `telnet localhost 8023`.
 - Control display with hotkeys:
   - `r`: Refresh the display and clear trails.
-  - `t`: Toggle between displaying all aircraft and only the closest aircraft (default 10).
+  - `t`: Toggle display mode - cycles through:
+    - **all**: Show all aircraft
+    - **closest**: Show only the 10 closest aircraft to the airport
+    - **high**: Show only aircraft above 25,000 feet
+    - **medium**: Show only aircraft between 10,000-25,000 feet
+    - **low**: Show only aircraft below 10,000 feet
   - `q`: Quit current session.
   - `x` or `s`: Shutdown the server completely.
 

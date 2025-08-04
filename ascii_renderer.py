@@ -330,6 +330,12 @@ class ASCIIRenderer:
         if display_mode == 'closest':
             limit = DISPLAY_CONFIG.get('display_aircraft_limit', 10)
             info_lines.append(f"Aircraft tracked: {len(aircraft_list)} (showing closest {limit})")
+        elif display_mode == 'high':
+            info_lines.append(f"Aircraft tracked: {len(aircraft_list)} (showing high altitude >25,000ft)")
+        elif display_mode == 'medium':
+            info_lines.append(f"Aircraft tracked: {len(aircraft_list)} (showing medium altitude 10,000-25,000ft)")
+        elif display_mode == 'low':
+            info_lines.append(f"Aircraft tracked: {len(aircraft_list)} (showing low altitude <10,000ft)")
         else:
             info_lines.append(f"Aircraft tracked: {len(aircraft_list)} (showing all)")
         
@@ -410,12 +416,22 @@ def create_demo_aircraft() -> List[Aircraft]:
     """Create some demo aircraft for testing"""
     demo_aircraft = []
     
-    # Create a few test aircraft within the default bounds
+    # Create test aircraft with varied altitudes for filtering demo
     aircraft_data = [
-        {"icao": "ABC123", "lat": 40.5, "lon": -74.5, "altitude": 25000, "speed": 450, "track": 90, "flight": "UAL123"},
-        {"icao": "DEF456", "lat": 41.2, "lon": -73.8, "altitude": 15000, "speed": 320, "track": 180, "flight": "DAL456"},
-        {"icao": "GHI789", "lat": 40.8, "lon": -74.2, "altitude": 35000, "speed": 520, "track": 270, "flight": "AAL789"},
-        {"icao": "JKL012", "lat": 41.5, "lon": -73.5, "altitude": 8000, "speed": 250, "track": 45, "flight": "SWA012"},
+        # High altitude aircraft (>25,000 ft)
+        {"icao": "ABC123", "lat": 40.5, "lon": -74.5, "altitude": 35000, "speed": 450, "track": 90, "flight": "UAL123"},
+        {"icao": "HIGH01", "lat": 40.9, "lon": -74.1, "altitude": 41000, "speed": 480, "track": 45, "flight": "DLH456"},
+        {"icao": "HIGH02", "lat": 41.1, "lon": -73.9, "altitude": 38000, "speed": 520, "track": 270, "flight": "BAW789"},
+        
+        # Medium altitude aircraft (10,000-25,000 ft)
+        {"icao": "MED001", "lat": 41.2, "lon": -73.8, "altitude": 15000, "speed": 320, "track": 180, "flight": "DAL456"},
+        {"icao": "MED002", "lat": 40.7, "lon": -74.3, "altitude": 20000, "speed": 380, "track": 135, "flight": "SWA789"},
+        {"icao": "MED003", "lat": 41.3, "lon": -73.6, "altitude": 12000, "speed": 300, "track": 315, "flight": "JBU321"},
+        
+        # Low altitude aircraft (<10,000 ft)
+        {"icao": "LOW001", "lat": 41.5, "lon": -73.5, "altitude": 8000, "speed": 250, "track": 45, "flight": "N12345"},
+        {"icao": "LOW002", "lat": 40.6, "lon": -74.4, "altitude": 5000, "speed": 180, "track": 225, "flight": "SKW456"},
+        {"icao": "LOW003", "lat": 41.0, "lon": -74.0, "altitude": 3000, "speed": 150, "track": 360, "flight": "EDV789"},
     ]
     
     for data in aircraft_data:
