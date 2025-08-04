@@ -196,7 +196,7 @@ async def shell(speed, reader, writer):
         'use_unicode_symbols': config.get('use_unicode_symbols', False),
         'airport': config.get('airport', 'RDU'),
         'radius': config.get('radius', 25),
-        'display_aircraft_limit': config.get('display_aircraft_limit', 10)
+        'display_aircraft_limit': config.get('display_aircraft_limit', 5)
     })
     
     # Function to check for terminal resize
@@ -504,7 +504,7 @@ async def shell(speed, reader, writer):
                     from adsb_data import calculate_distance
                     airport_lat = airport_info['lat']
                     airport_lon = airport_info['lon']
-                    limit = DISPLAY_CONFIG.get('display_aircraft_limit', 10)
+                    limit = DISPLAY_CONFIG.get('display_aircraft_limit', 5)
                     
                     # Filter out aircraft without position data
                     aircraft_with_pos = [a for a in current_aircraft if a.latitude is not None and a.longitude is not None]

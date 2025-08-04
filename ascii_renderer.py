@@ -46,7 +46,7 @@ class ASCIIRenderer:
         self.terminal_width = DISPLAY_CONFIG.get('terminal_width', 80)
         # Reserve space for the info panel
         self.full_terminal_height = DISPLAY_CONFIG.get('terminal_height', 25)
-        self.info_panel_height = 22  # Estimated height for the info panel
+        self.info_panel_height = 14  # Reduced height for the info panel (was 22)
 
         # Calculate map height, ensuring it's not negative
         self.map_height = self.full_terminal_height - self.info_panel_height
@@ -319,8 +319,8 @@ class ASCIIRenderer:
         """Create information panel showing aircraft details"""
         info_lines = []
         info_lines.append("=" * self.terminal_width)
-        info_lines.append(f"ADS-B ASCII Radar - {datetime.utcnow().strftime('%H:%M:%S')} UTC")
-        # Show display mode and aircraft count
+        
+        # Combine info on fewer lines to save space
         # Use session-specific display mode if available
         if hasattr(self, 'session_display_mode'):
             display_mode = self.session_display_mode[0]
@@ -331,34 +331,23 @@ class ASCIIRenderer:
         total_count = getattr(self, 'total_aircraft_count', len(aircraft_list))
         filtered_count = len(aircraft_list)
         
+        # Combine time and mode info on one line
+        mode_str = "DEMO" if DISPLAY_CONFIG.get('demo_mode', False) else "LIVE"
+        airport = DISPLAY_CONFIG.get('airport', 'RDU')
+        info_lines.append(f"ADS-B Radar {datetime.utcnow().strftime('%H:%M:%S')}Z | {mode_str} | {airport} | Hotkeys: (r)efresh (t)oggle (q)uit")
+        
+        # Show aircraft count with mode on one line
         if display_mode == 'closest':
-            limit = DISPLAY_CONFIG.get('display_aircraft_limit', 10)
-            info_lines.append(f"Aircraft tracked: {total_count} (showing closest {filtered_count} of {limit} max)")
+            limit = DISPLAY_CONFIG.get('display_aircraft_limit', 5)
+            info_lines.append(f"Aircraft: {total_count} total, showing closest {filtered_count}")
         elif display_mode == 'high':
-            info_lines.append(f"Aircraft tracked: {total_count} (showing {filtered_count} high altitude >25,000ft)")
+            info_lines.append(f"Aircraft: {total_count} total, {filtered_count} high (>25k ft)")
         elif display_mode == 'medium':
-            info_lines.append(f"Aircraft tracked: {total_count} (showing {filtered_count} medium altitude 10,000-25,000ft)")
+            info_lines.append(f"Aircraft: {total_count} total, {filtered_count} medium (10-25k ft)")
         elif display_mode == 'low':
-            info_lines.append(f"Aircraft tracked: {total_count} (showing {filtered_count} low altitude <10,000ft)")
+            info_lines.append(f"Aircraft: {total_count} total, {filtered_count} low (<10k ft)")
         else:
-            info_lines.append(f"Aircraft tracked: {total_count} (showing all)")
-        
-        bounds = self.map_bounds
-        info_lines.append(f"Bounds: {bounds['lat_min']:.2f},{bounds['lon_min']:.2f} to "
-                         f"{bounds['lat_max']:.2f},{bounds['lon_max']:.2f}")
-        
-        # Show current mode and speed multiplier
-        if DISPLAY_CONFIG.get('demo_mode', False):
-            info_lines.append(f"Mode: DEMO (Speed x{DISPLAY_CONFIG['speed_multiplier']})")
-        else:
-            airport = DISPLAY_CONFIG.get('airport', 'RDU')
-            radius = DISPLAY_CONFIG.get('radius', 25)
-            info_lines.append(f"Mode: LIVE - {airport} ({radius}nm radius)")
-        
-        # Add hotkeys
-        info_lines.append("")
-        info_lines.append("Hotkeys: (r)efresh, (t)oggle display mode, (q)uit")
-        info_lines.append("")
+            info_lines.append(f"Aircraft: {total_count} total (showing all)")
         
         # Show some aircraft details
         if airport_info and 'lat' in airport_info and 'lon' in airport_info:
@@ -377,8 +366,8 @@ class ASCIIRenderer:
         else:
             sorted_aircraft = aircraft_list # Fallback in case airport info is missing
         
-        # Get the limit for number of aircraft to display
-        display_limit = DISPLAY_CONFIG.get('display_aircraft_limit', 10)
+        # Get the limit for number of aircraft to display - reduced to 5
+        display_limit = min(5, DISPLAY_CONFIG.get('display_aircraft_limit', 5))
         
         for i, aircraft in enumerate(sorted_aircraft[:display_limit]):  # Apply display limit
             callsign = aircraft.callsign[:8] if aircraft.callsign else "N/A"
