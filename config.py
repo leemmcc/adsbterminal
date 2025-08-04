@@ -40,7 +40,8 @@ DISPLAY_CONFIG = {
         'border': 'blue',
     },
     'show_trails': True,
-    'trail_length': 10,  # number of previous positions to show
+    'trail_length': 15,  # number of previous positions to show
+    'display_aircraft_limit': 10  # Number of aircraft to display in the info panel
 }
 
 # Data Processing Configuration
@@ -49,6 +50,7 @@ PROCESSING_CONFIG = {
     'max_altitude': 50000,  # maximum altitude to display (feet)
     'filter_ground': False, # whether to filter out ground traffic
     'distance_filter': 100, # maximum distance in nautical miles (0 = no filter)
+    'trail_length': 15,     # number of trail positions to keep
 }
 
 # ASCII Art Styles

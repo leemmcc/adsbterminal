@@ -1,7 +1,6 @@
-requests>=2.28.0
-websocket-client>=1.4.0
-numpy>=1.21.0
-colorama>=0.4.6
-python-socketio>=5.7.0
-pillow>=9.0.0
-scipy>=1.9.0
+# Core dependencies for ADS-B Terminal Radar
+pyyaml>=6.0.0         # For configuration file parsing
+telnetlib3>=2.0.0     # For telnet server functionality
+requests>=2.28.0      # For fetching ADS-B data from HTTP APIs
+aiohttp>=3.9.0        # For async HTTP requests to ADS-B APIs
+colorama>=0.4.6       # For cross-platform colored terminal output

@@ -36,6 +36,24 @@ Try the demo mode first to see how it works:
 python main.py --demo
 ```
 
+### Telnet Server Mode
+
+Run as a telnet server to allow remote connections:
+
+```bash
+python telnet_server.py
+```
+
+Then connect from any telnet client:
+```bash
+telnet localhost 8023
+```
+
+#### Telnet Server Hotkeys
+- `r` - Refresh display and clear trails
+- `q` - Quit current session
+- `x` or `s` - Shutdown the server completely
+
 ### Live Mode with ADS-B Data
 
 If you have dump1090 or another ADS-B source running:

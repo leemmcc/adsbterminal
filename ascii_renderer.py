@@ -33,7 +33,7 @@ except ImportError:
         pass
 
 from config import DISPLAY_CONFIG, ASCII_STYLES, DEFAULT_STYLE
-from adsb_data import Aircraft
+from adsb_data import Aircraft, calculate_distance
 
 
 class ASCIIRenderer:
@@ -42,20 +42,40 @@ class ASCIIRenderer:
     def __init__(self, style: str = DEFAULT_STYLE):
         self.style = style
         self.ascii_style = ASCII_STYLES.get(style, ASCII_STYLES[DEFAULT_STYLE])
-        self.terminal_width = DISPLAY_CONFIG['terminal_width']
-        self.terminal_height = DISPLAY_CONFIG['terminal_height']
-        self.map_bounds = DISPLAY_CONFIG['map_bounds']
+        # Get current terminal dimensions from DISPLAY_CONFIG
+        self.terminal_width = DISPLAY_CONFIG.get('terminal_width', 80)
+        # Reserve space for the info panel
+        self.full_terminal_height = DISPLAY_CONFIG.get('terminal_height', 25)
+        self.info_panel_height = 22  # Estimated height for the info panel
+
+        # Calculate map height, ensuring it's not negative
+        self.map_height = self.full_terminal_height - self.info_panel_height
+        if self.map_height < 5: self.map_height = 5
+
+        self.map_bounds = DISPLAY_CONFIG.get('map_bounds', {
+            'lat_min': 40.0,
+            'lat_max': 42.0,
+            'lon_min': -75.0,
+            'lon_max': -73.0,
+        })
         
-        # Create grid for rendering
+        # Create grid for rendering using the calculated map_height
         self.grid = [[' ' for _ in range(self.terminal_width)] 
-                     for _ in range(self.terminal_height)]
+                     for _ in range(self.map_height)]
         self.color_grid = [[None for _ in range(self.terminal_width)] 
-                          for _ in range(self.terminal_height)]
+                          for _ in range(self.map_height)]
+        
+        # Track cells reserved for airport symbol and name
+        self.airport_cells = set()
+        
+        # Log the dimensions being used
+        print(f"ASCIIRenderer initialized with terminal_width={self.terminal_width}, "
+              f"full_terminal_height={self.full_terminal_height}, map_height={self.map_height}")
         
     def clear_grid(self):
         """Clear the rendering grid"""
         bg_char = self.ascii_style['background']
-        for y in range(self.terminal_height):
+        for y in range(self.map_height):
             for x in range(self.terminal_width):
                 self.grid[y][x] = bg_char
                 self.color_grid[y][x] = None
@@ -64,40 +84,59 @@ class ASCIIRenderer:
         """Convert latitude/longitude to grid coordinates"""
         bounds = self.map_bounds
         
-        # Normalize coordinates to 0-1
         lat_norm = (latitude - bounds['lat_min']) / (bounds['lat_max'] - bounds['lat_min'])
         lon_norm = (longitude - bounds['lon_min']) / (bounds['lon_max'] - bounds['lon_min'])
         
-        # Convert to grid coordinates (flip Y axis for display)
         x = int(lon_norm * (self.terminal_width - 1))
-        y = int((1 - lat_norm) * (self.terminal_height - 1))
+        y = int((1 - lat_norm) * (self.map_height - 1))
         
-        # Clamp to grid bounds
         x = max(0, min(self.terminal_width - 1, x))
-        y = max(0, min(self.terminal_height - 1, y))
+        y = max(0, min(self.map_height - 1, y))
         
         return x, y
     
     def get_aircraft_symbol(self, aircraft: Aircraft) -> str:
-        """Get the appropriate symbol for an aircraft based on heading"""
-        if aircraft.track is None:
-            return self.ascii_style['aircraft'][0]  # Default to north-facing
+        """Get the appropriate symbol for an aircraft based on properties"""
+        # Check if we should use Unicode directional symbols
+        if DISPLAY_CONFIG.get('use_unicode_symbols', False) and aircraft.track is not None:
+            # Try different sets of directional symbols
+            heading = aircraft.track
+            
+            # Option 1: Arrow symbols (most compatible)
+            if 337.5 <= heading or heading < 22.5:
+                return '^'  # North
+            elif 22.5 <= heading < 67.5:
+                return '>'  # Northeast (simplified)
+            elif 67.5 <= heading < 112.5:
+                return '>'  # East
+            elif 112.5 <= heading < 157.5:
+                return '>'  # Southeast (simplified)
+            elif 157.5 <= heading < 202.5:
+                return 'v'  # South
+            elif 202.5 <= heading < 247.5:
+                return '<'  # Southwest (simplified)
+            elif 247.5 <= heading < 292.5:
+                return '<'  # West
+            elif 292.5 <= heading < 337.5:
+                return '<'  # Northwest (simplified)
         
-        # Convert track to 4-direction index (N, E, S, W)
-        # Normalize to 0-360
-        track = aircraft.track % 360
-        
-        # Divide into quadrants
-        if track < 45 or track >= 315:
-            direction_idx = 0  # North
-        elif track < 135:
-            direction_idx = 1  # East
-        elif track < 225:
-            direction_idx = 2  # South
+        # Fallback to ASCII symbols based on speed
+        if aircraft.ground_speed and aircraft.ground_speed > 400:
+            # Fast aircraft symbols
+            symbols = ['*', '+', '#', '@']
+        elif aircraft.ground_speed and aircraft.ground_speed < 200:
+            # Slow aircraft symbols  
+            symbols = ['o', '0', 'O', '.']
         else:
-            direction_idx = 3  # West
+            # Medium speed aircraft symbols
+            symbols = ['x', 'X', '*', '+']
         
-        return self.ascii_style['aircraft'][direction_idx]
+        # Use ICAO hash to consistently assign symbol to each aircraft
+        if aircraft.icao:
+            symbol_index = hash(aircraft.icao) % len(symbols)
+            return symbols[symbol_index]
+        
+        return 'x'  # Default fallback
     
     def get_aircraft_color(self, aircraft: Aircraft) -> str:
         """Get color for aircraft based on altitude"""
@@ -120,15 +159,41 @@ class ASCIIRenderer:
         if not DISPLAY_CONFIG['show_trails'] or not aircraft.position_history:
             return
         
-        trail_char = self.ascii_style['trail']
+        trail_char = '.'  # Use simple dot for trail compatibility
         
-        # Render trail from oldest to newest (so newer positions overwrite older)
-        for lat, lon, timestamp in aircraft.position_history[:-1]:  # Exclude current position
+        # Render all trail points except the current position
+        for i, (lat, lon, timestamp) in enumerate(aircraft.position_history[:-1]):
             x, y = self.lat_lon_to_grid(lat, lon)
-            if 0 <= x < self.terminal_width and 0 <= y < self.terminal_height:
-                if self.grid[y][x] == self.ascii_style['background']:  # Don't overwrite aircraft
+            if 0 <= x < self.terminal_width and 0 <= y < self.map_height:
+                # Only render if cell is empty or has background AND not reserved for airport
+                if (x, y) not in self.airport_cells and self.grid[y][x] in [self.ascii_style['background'], ' ']:
                     self.grid[y][x] = trail_char
-                    self.color_grid[y][x] = 'white'
+                    aircraft_color = self.get_aircraft_color(aircraft)
+                    self.color_grid[y][x] = aircraft_color
+    
+    def render_airport(self, lat: float, lon: float, code: str):
+        """Render airport marker at given coordinates"""
+        x, y = self.lat_lon_to_grid(lat, lon)
+        
+        # Clear previous airport cells tracking
+        self.airport_cells.clear()
+        
+        if 0 <= x < self.terminal_width and 0 <= y < self.map_height:
+            # Use a distinctive symbol for the airport
+            self.grid[y][x] = 'O'
+            self.color_grid[y][x] = 'white'
+            self.airport_cells.add((x, y))
+            
+            # Try to render the airport code around it if space permits
+            code = code[:3]  # Limit to 3 chars
+            # Place code above the airport marker if possible
+            if y > 0 and x - 1 >= 0 and x + len(code) < self.terminal_width:
+                for i, char in enumerate(code):
+                    code_x = x - 1 + i
+                    code_y = y - 1
+                    self.grid[code_y][code_x] = char
+                    self.color_grid[code_y][code_x] = 'white'
+                    self.airport_cells.add((code_x, code_y))
     
     def render_aircraft(self, aircraft_list: List[Aircraft]):
         """Render all aircraft on the grid"""
@@ -144,7 +209,8 @@ class ASCIIRenderer:
             if aircraft.latitude is not None and aircraft.longitude is not None:
                 x, y = self.lat_lon_to_grid(aircraft.latitude, aircraft.longitude)
                 
-                if 0 <= x < self.terminal_width and 0 <= y < self.terminal_height:
+                # Skip cells reserved for airport
+                if (x, y) not in self.airport_cells and 0 <= x < self.terminal_width and 0 <= y < self.map_height:
                     symbol = self.get_aircraft_symbol(aircraft)
                     color = self.get_aircraft_color(aircraft)
                     
@@ -160,12 +226,12 @@ class ASCIIRenderer:
             if self.grid[0][x] == self.ascii_style['background']:
                 self.grid[0][x] = '-'
                 self.color_grid[0][x] = border_color
-            if self.grid[self.terminal_height - 1][x] == self.ascii_style['background']:
-                self.grid[self.terminal_height - 1][x] = '-'
-                self.color_grid[self.terminal_height - 1][x] = border_color
+            if self.grid[self.map_height - 1][x] == self.ascii_style['background']:
+                self.grid[self.map_height - 1][x] = '-'
+                self.color_grid[self.map_height - 1][x] = border_color
         
         # Left and right borders
-        for y in range(self.terminal_height):
+        for y in range(self.map_height):
             if self.grid[y][0] == self.ascii_style['background']:
                 self.grid[y][0] = '|'
                 self.color_grid[y][0] = border_color
@@ -176,12 +242,12 @@ class ASCIIRenderer:
         # Corners
         self.grid[0][0] = '+'
         self.grid[0][self.terminal_width - 1] = '+'
-        self.grid[self.terminal_height - 1][0] = '+'
-        self.grid[self.terminal_height - 1][self.terminal_width - 1] = '+'
+        self.grid[self.map_height - 1][0] = '+'
+        self.grid[self.map_height - 1][self.terminal_width - 1] = '+'
         self.color_grid[0][0] = border_color
         self.color_grid[0][self.terminal_width - 1] = border_color
-        self.color_grid[self.terminal_height - 1][0] = border_color
-        self.color_grid[self.terminal_height - 1][self.terminal_width - 1] = border_color
+        self.color_grid[self.map_height - 1][0] = border_color
+        self.color_grid[self.map_height - 1][self.terminal_width - 1] = border_color
     
     def get_color_code(self, color_name: str) -> str:
         """Convert color name to ANSI color code"""
@@ -198,47 +264,58 @@ class ASCIIRenderer:
         return color_map.get(color_name, '')
     
     def render_to_string(self, aircraft_list: List[Aircraft], 
-                        show_info: bool = True) -> str:
+                        show_info: bool = True, airport_info: Dict = None) -> str:
         """Render the complete display as a string"""
+        # First, calculate airport cells if airport info provided
+        if airport_info and 'lat' in airport_info and 'lon' in airport_info:
+            code = airport_info.get('code', 'APT')
+            # Pre-calculate airport cells before rendering aircraft
+            x, y = self.lat_lon_to_grid(airport_info['lat'], airport_info['lon'])
+            self.airport_cells.clear()
+            if 0 <= x < self.terminal_width and 0 <= y < self.map_height:
+                self.airport_cells.add((x, y))
+                # Also reserve cells for the airport code
+                if y > 0 and x - 1 >= 0 and x + len(code[:3]) < self.terminal_width:
+                    for i in range(len(code[:3])):
+                        self.airport_cells.add((x - 1 + i, y - 1))
+        
+        # Now render aircraft (which will avoid airport cells)
         self.render_aircraft(aircraft_list)
+        
+        # Finally render airport on top
+        if airport_info and 'lat' in airport_info and 'lon' in airport_info:
+            code = airport_info.get('code', 'APT')
+            self.render_airport(airport_info['lat'], airport_info['lon'], code)
+        
         self.render_border()
         
         output_lines = []
         
         # Render grid with colors
-        for y in range(self.terminal_height):
+        for y in range(self.map_height):
             line = ""
-            current_color = None
             
             for x in range(self.terminal_width):
                 char = self.grid[y][x]
                 color = self.color_grid[y][x]
                 
-                # Apply color changes
-                if color != current_color:
-                    if current_color is not None:
-                        line += Style.RESET_ALL
-                    
-                    if color is not None:
-                        line += self.get_color_code(color)
-                    
-                    current_color = color
-                
-                line += char
-            
-            # Reset color at end of line
-            if current_color is not None:
-                line += Style.RESET_ALL
+                # Add color if specified, then character, then reset
+                if color is not None:
+                    line += self.get_color_code(color) + char + Style.RESET_ALL
+                else:
+                    line += char
             
             output_lines.append(line)
         
         # Add information panel if requested
         if show_info:
-            output_lines.extend(self._create_info_panel(aircraft_list))
+            # Clear from cursor to end of screen to prevent old text from persisting
+            output_lines.append("\x1b[J") 
+            output_lines.extend(self._create_info_panel(aircraft_list, airport_info))
         
         return '\n'.join(output_lines)
     
-    def _create_info_panel(self, aircraft_list: List[Aircraft]) -> List[str]:
+    def _create_info_panel(self, aircraft_list: List[Aircraft], airport_info: Dict = None) -> List[str]:
         """Create information panel showing aircraft details"""
         info_lines = []
         info_lines.append("=" * self.terminal_width)
@@ -249,22 +326,60 @@ class ASCIIRenderer:
         info_lines.append(f"Bounds: {bounds['lat_min']:.2f},{bounds['lon_min']:.2f} to "
                          f"{bounds['lat_max']:.2f},{bounds['lon_max']:.2f}")
         
-        # Show some aircraft details
+        # Show current mode and speed multiplier
+        if DISPLAY_CONFIG.get('demo_mode', False):
+            info_lines.append(f"Mode: DEMO (Speed x{DISPLAY_CONFIG['speed_multiplier']})")
+        else:
+            airport = DISPLAY_CONFIG.get('airport', 'RDU')
+            radius = DISPLAY_CONFIG.get('radius', 25)
+            info_lines.append(f"Mode: LIVE - {airport} ({radius}nm radius)")
+        
+        # Add hotkeys
         info_lines.append("")
-        info_lines.append("ICAO     Call     Alt(ft)  Spd(kt)  Hdg°")
-        info_lines.append("-" * 45)
+        info_lines.append("Hotkeys: (r)efresh, (q)uit, (x/s)hutdown server")
+        info_lines.append("")
         
-        # Sort by altitude (highest first)
-        sorted_aircraft = sorted([a for a in aircraft_list if a.altitude is not None], 
-                               key=lambda x: x.altitude or 0, reverse=True)
+        # Show some aircraft details
+        if airport_info and 'lat' in airport_info and 'lon' in airport_info:
+            info_lines.append(f"Closest Aircraft to {airport_info.get('code', 'Airport')}:")
+        else:
+            info_lines.append("Aircraft Details:")
+        info_lines.append("ICAO     Call     Alt(ft)  Spd(kt)  Hdg°  Dist(nm)")
+        info_lines.append("-" * 55)
         
-        for i, aircraft in enumerate(sorted_aircraft[:10]):  # Show top 10
+        # Sort by distance (closest first) to airport
+        if airport_info and 'lat' in airport_info and 'lon' in airport_info:
+            airport_lat = airport_info['lat']
+            airport_lon = airport_info['lon']
+            sorted_aircraft = sorted([a for a in aircraft_list if a.latitude is not None and a.longitude is not None], 
+                                     key=lambda x: calculate_distance(airport_lat, airport_lon, x.latitude, x.longitude))
+        else:
+            sorted_aircraft = aircraft_list # Fallback in case airport info is missing
+        
+        # Get the limit for number of aircraft to display
+        display_limit = DISPLAY_CONFIG.get('display_aircraft_limit', 10)
+        
+        for i, aircraft in enumerate(sorted_aircraft[:display_limit]):  # Apply display limit
             callsign = aircraft.callsign[:8] if aircraft.callsign else "N/A"
-            altitude = f"{aircraft.altitude:,}" if aircraft.altitude else "N/A"
             speed = f"{aircraft.ground_speed}" if aircraft.ground_speed else "N/A"
             heading = f"{aircraft.track:.0f}" if aircraft.track else "N/A"
             
-            info_lines.append(f"{aircraft.icao:8} {callsign:8} {altitude:>8} {speed:>7} {heading:>5}")
+            # Color-code the altitude based on aircraft altitude category
+            if aircraft.altitude:
+                altitude_str = f"{aircraft.altitude:,}"
+                altitude_color = self.get_aircraft_color(aircraft)
+                colored_altitude = f"{self.get_color_code(altitude_color)}{altitude_str:>8}{Style.RESET_ALL}"
+            else:
+                colored_altitude = "     N/A"
+            
+            # Calculate distance if airport info is available
+            if airport_info and 'lat' in airport_info and 'lon' in airport_info:
+                distance = calculate_distance(airport_lat, airport_lon, aircraft.latitude, aircraft.longitude)
+                distance_str = f"{distance:.1f}"
+            else:
+                distance_str = "N/A"
+            
+            info_lines.append(f"{aircraft.icao:8} {callsign:8} {colored_altitude} {speed:>7} {heading:>5} {distance_str:>8}")
         
         return info_lines
     

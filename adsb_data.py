@@ -40,16 +40,17 @@ class Aircraft:
         if 'lat' in data and 'lon' in data and data['lat'] and data['lon']:
             new_lat, new_lon = float(data['lat']), float(data['lon'])
             
-            # Only update position if it's significantly different
+            # Only update position if it's different (ensures unique trail points)
             if (self.latitude is None or self.longitude is None or
-                abs(new_lat - self.latitude) > 0.001 or
-                abs(new_lon - self.longitude) > 0.001):
+                abs(new_lat - self.latitude) > 0.0001 or
+                abs(new_lon - self.longitude) > 0.0001):
                 
                 self.latitude = new_lat
                 self.longitude = new_lon
                 
-                # Add to position history
-                self.position_history.append((new_lat, new_lon, self.last_seen))
+                # Add unique position to history
+                if not self.position_history or calculate_distance(self.position_history[-1][0], self.position_history[-1][1], new_lat, new_lon) > 0.1:
+                    self.position_history.append((new_lat, new_lon, self.last_seen))
                 
                 # Limit history length
                 max_history = PROCESSING_CONFIG.get('trail_length', 10)

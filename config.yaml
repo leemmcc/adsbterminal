@@ -1,0 +1,29 @@
+speed: 100
+demomode: false  # Set to false for live data, true for demo
+interval: 5
+port: 8023
+
+# Live mode settings
+airport: RDU  # Airport code (RDU, CLT, ATL, DCA, JFK, LAX, ORD, DFW, DEN, SFO)
+radius: 100    # Search radius in nautical miles
+
+# Display options
+use_colors: true              # Enable ANSI colors (disable for basic terminals)
+use_unicode_symbols: true     # Use Unicode aircraft symbols (set to false for ASCII-only terminals)
+
+# Terminal compatibility options
+force_windows_mode: false     # Set to true to optimize for Windows telnet clients
+use_simple_colors: false      # Use only basic 8-color palette instead of 256-color
+strict_ascii_only: false      # Disable all special characters (maximum compatibility)
+trail_length: 50  # Adjust the number of trail points to keep for aircraft history
+trail_min_distance: 1  # Minimum distance in nautical miles between trail points
+display_aircraft_limit: 10  # Maximum number of aircraft to show in the info panel (0 = show all)
+keepalive_interval: 15  # Send keepalive every N seconds to prevent telnet timeout (0 = disable)
+# Optional: Set custom terminal size for telnet clients that don't support auto-detection
+# Uncomment and adjust these values for your terminal window size:
+# For Windows Terminal (recommended):
+# terminal_width: 158
+# terminal_height: 64
+# For smaller terminals:
+# terminal_width: 80
+# terminal_height: 25

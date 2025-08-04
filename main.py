@@ -33,6 +33,7 @@ class ADSBRadarApp:
         self.renderer = ASCIIRenderer(style=style)
         self.update_interval = ADSB_CONFIG['update_interval']
         
+        self.speed_multiplier = 1  # Default speed multiplier
         # Setup signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
@@ -66,6 +67,7 @@ class ADSBRadarApp:
     def run_demo(self):
         """Run in demo mode with fake aircraft"""
         print("ADS-B ASCII Radar - Demo Mode")
+        print(f"Speed multiplier: {self.speed_multiplier}x")
         print("Press Ctrl+C to exit")
         print("=" * 50)
         
@@ -95,12 +97,12 @@ class ADSBRadarApp:
         for aircraft in aircraft_list:
             if aircraft.latitude and aircraft.longitude and aircraft.track is not None:
                 # Simple movement simulation
-                speed_factor = 0.001
+                speed_factor = 0.01 * self.speed_multiplier
                 track_rad = aircraft.track * 3.14159 / 180
                 
                 # Move aircraft slightly in their heading direction
-                lat_delta = speed_factor * (aircraft.ground_speed or 400) / 60 * 0.000144
-                lon_delta = speed_factor * (aircraft.ground_speed or 400) / 60 * 0.000144
+                lat_delta = speed_factor * (aircraft.ground_speed or 400) / 60 * 0.00144
+                lon_delta = speed_factor * (aircraft.ground_speed or 400) / 60 * 0.00144
                 
                 aircraft.latitude += lat_delta * abs(1 - abs(track_rad - 1.57) / 1.57)
                 aircraft.longitude += lon_delta * (1 if track_rad < 1.57 or track_rad > 4.71 else -1)
@@ -231,6 +233,8 @@ Examples:
     parser.add_argument('--interval', type=int, default=ADSB_CONFIG['update_interval'],
                        help='Update interval in seconds')
     
+    parser.add_argument('--speed', type=int, default=1,
+                       help='Set movement speed multiplier for demo mode')
     parser.add_argument('--verbose', '-v', action='store_true',
                        help='Enable verbose logging')
     
@@ -250,7 +254,14 @@ Examples:
         app.set_data_source(args.url)
     
     app.set_update_interval(args.interval)
-    
+
+    # Set speed multiplier
+    app.speed_multiplier = args.speed if args.demo else 1
+
+    # Update DISPLAY_CONFIG to reflect current mode
+    DISPLAY_CONFIG['demo_mode'] = args.demo
+    DISPLAY_CONFIG['speed_multiplier'] = app.speed_multiplier
+
     # Run the application
     try:
         success = app.run()
