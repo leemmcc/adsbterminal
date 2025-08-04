@@ -319,7 +319,7 @@ class ASCIIRenderer:
         """Create information panel showing aircraft details"""
         info_lines = []
         info_lines.append("=" * self.terminal_width)
-        info_lines.append(f"ADS-B ASCII Radar - {datetime.now().strftime('%H:%M:%S')} UTC")
+        info_lines.append(f"ADS-B ASCII Radar - {datetime.utcnow().strftime('%H:%M:%S')} UTC")
         info_lines.append(f"Aircraft tracked: {len(aircraft_list)}")
         
         bounds = self.map_bounds
@@ -336,7 +336,7 @@ class ASCIIRenderer:
         
         # Add hotkeys
         info_lines.append("")
-        info_lines.append("Hotkeys: (r)efresh, (q)uit, (x/s)hutdown server")
+        info_lines.append("Hotkeys: (r)efresh, (q)uit")
         info_lines.append("")
         
         # Show some aircraft details

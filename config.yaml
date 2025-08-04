@@ -19,6 +19,7 @@ trail_length: 50  # Adjust the number of trail points to keep for aircraft histo
 trail_min_distance: 1  # Minimum distance in nautical miles between trail points
 display_aircraft_limit: 10  # Maximum number of aircraft to show in the info panel (0 = show all)
 keepalive_interval: 15  # Send keepalive every N seconds to prevent telnet timeout (0 = disable)
+debug: false  # Enable debug logging for aircraft tracking updates
 # Optional: Set custom terminal size for telnet clients that don't support auto-detection
 # Uncomment and adjust these values for your terminal window size:
 # For Windows Terminal (recommended):

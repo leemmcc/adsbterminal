@@ -4,6 +4,8 @@ import yaml
 import re
 import signal
 import time
+import threading
+import sys
 from datetime import datetime
 from ascii_renderer import ASCIIRenderer, create_demo_aircraft
 from main import ADSBRadarApp
@@ -16,6 +18,7 @@ with open('config.yaml', 'r') as file:
 
 # Global server reference for shutdown
 _server = None
+_shutdown_event = None  # Will be created in the async context
 
 def process_colored_line(line, terminal_width, use_colors):
     """Process a line with ANSI colors, ensuring proper terminal width"""
@@ -85,13 +88,6 @@ async def handle_input(queue, app, on_reset):
                 elif key == 'r':
                     print("Refreshing display, re-detecting terminal size, and clearing trails...")
                     await on_reset(clear_trails=True, refresh_display=True)
-                elif key == 'x' or key == 's':
-                    print("Server shutdown command received.")
-                    app.running = False
-                    if _server:
-                        print("Initiating server shutdown...")
-                        _server.close()
-                        await _server.wait_closed()
         except asyncio.TimeoutError:
             continue
 
@@ -236,7 +232,8 @@ async def shell(speed, reader, writer):
         """Fetches live aircraft or creates demo data based on mode"""
         if app.demo_mode:
             return create_demo_aircraft()
-        print(f"Fetching live data for {airport_code}, radius {radius}")
+        if config.get('debug', False):
+            print(f"Fetching live data for {airport_code}, radius {radius}")
         return await fetch_aircraft_near_airport(airport_code, radius)
 
     # Setup reset function for async context
@@ -293,7 +290,8 @@ async def shell(speed, reader, writer):
                 # Clear trails for all tracked aircraft
                 for aircraft in tracked_aircraft.values():
                     aircraft.position_history = []
-                print("Cleared all aircraft trails")
+                if config.get('debug', False):
+                    print("Cleared all aircraft trails")
                 # If not fetching new data, just update display
                 if not refresh_display and not app.demo_mode:
                     # Update the display reference
@@ -332,7 +330,8 @@ async def shell(speed, reader, writer):
                         lat_diff = abs(new_aircraft.latitude - existing.latitude) if new_aircraft.latitude else 0
                         lon_diff = abs(new_aircraft.longitude - existing.longitude) if new_aircraft.longitude else 0
                         if lat_diff > 0 or lon_diff > 0:
-                            print(f"Aircraft {icao} moved: lat_diff={lat_diff:.6f}, lon_diff={lon_diff:.6f}")
+                            if config.get('debug', False):
+                                print(f"Aircraft {icao} moved: lat_diff={lat_diff:.6f}, lon_diff={lon_diff:.6f}")
                     
                     # Check if position has changed enough to add to history
                     if new_aircraft.latitude and new_aircraft.longitude:
@@ -355,12 +354,14 @@ async def shell(speed, reader, writer):
                             max_history = config.get('trail_length', PROCESSING_CONFIG.get('trail_length', 15))
                             if len(new_aircraft.position_history) > max_history:
                                 new_aircraft.position_history = new_aircraft.position_history[-max_history:]
-                            print(f"Aircraft {icao} trail grew to {len(new_aircraft.position_history)} unique points")
+                            if config.get('debug', False):
+                                print(f"Aircraft {icao} trail grew to {len(new_aircraft.position_history)} unique points")
                 else:
                     # New aircraft - add initial position to history (unless clearing trails)
                     if new_aircraft.latitude and new_aircraft.longitude and not clear_trails:
                         new_aircraft.position_history.append((new_aircraft.latitude, new_aircraft.longitude, datetime.now()))
-                        print(f"New aircraft {icao} starting with 1 trail point")
+                        if config.get('debug', False):
+                            print(f"New aircraft {icao} starting with 1 trail point")
                 
                 tracked_aircraft[icao] = new_aircraft
                 updated_aircraft.append(new_aircraft)
@@ -369,11 +370,13 @@ async def shell(speed, reader, writer):
             for icao in list(tracked_aircraft.keys()):
                 if icao not in current_icaos:
                     del tracked_aircraft[icao]
-                    print(f"Stopped tracking {icao}")
+                    if config.get('debug', False):
+                        print(f"Stopped tracking {icao}")
             
             aircraft_ref['data'] = updated_aircraft
         
-        print(f"Loaded {len(aircraft_ref['data'])} aircraft")
+        if config.get('debug', False):
+            print(f"Loaded {len(aircraft_ref['data'])} aircraft")
 
     # Clear any remaining data from terminal size detection
     cleared_count = 0
@@ -439,7 +442,8 @@ async def shell(speed, reader, writer):
                     writer.write('')
                     await writer.drain()
                     last_keepalive = current_time
-                    print(f"Sent keepalive to {peername} at {datetime.now().strftime('%H:%M:%S')}")
+                    if config.get('debug', False):
+                        print(f"Sent keepalive to {peername} at {datetime.now().strftime('%H:%M:%S')}")
                 except Exception as e:
                     print(f"Keepalive failed for {peername}: {e}")
                     break
@@ -508,10 +512,55 @@ async def shell(speed, reader, writer):
             except Exception:
                 pass
 
+def keyboard_monitor(loop, shutdown_event):
+    """Monitor keyboard input in server console"""
+    print("\nPress 'x' or 's' in this console to shutdown the server...\n")
+    
+    try:
+        import msvcrt  # Windows
+        while True:
+            if msvcrt.kbhit():
+                key = msvcrt.getch().decode('utf-8', errors='ignore').lower()
+                if key in ['x', 's']:
+                    print("\nShutdown command received from console.")
+                    # Create a coroutine to set the event
+                    async def set_shutdown():
+                        shutdown_event.set()
+                    asyncio.run_coroutine_threadsafe(set_shutdown(), loop)
+                    break
+    except ImportError:
+        # Unix/Linux - use different approach
+        import termios, tty
+        old_settings = termios.tcgetattr(sys.stdin)
+        try:
+            tty.setraw(sys.stdin.fileno())
+            while True:
+                key = sys.stdin.read(1).lower()
+                if key in ['x', 's']:
+                    print("\nShutdown command received from console.")
+                    # Create a coroutine to set the event
+                    async def set_shutdown():
+                        shutdown_event.set()
+                    asyncio.run_coroutine_threadsafe(set_shutdown(), loop)
+                    break
+        finally:
+            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+
 async def main(port=8023, speed=10):
-    global _server
+    global _server, _shutdown_event
     print(f"Starting telnet server on port {port}...")
     print(f"Demo mode: {config.get('demomode', True)}, Speed: {config.get('speed', 10)}, Interval: {config.get('interval', 1)}")
+    
+    # Create shutdown event in the async context
+    _shutdown_event = asyncio.Event()
+    
+    # Get current event loop
+    loop = asyncio.get_running_loop()
+    
+    # Start keyboard monitoring thread
+    keyboard_thread = threading.Thread(target=keyboard_monitor, args=(loop, _shutdown_event), daemon=True)
+    keyboard_thread.start()
+    
     # Create server with no timeout (timeout=None disables it)
     server = await telnetlib3.create_server(
         port=port, 
@@ -521,13 +570,30 @@ async def main(port=8023, speed=10):
     _server = server  # Store server reference globally
     for sock in server.sockets:
         print(f"Listening on interface {sock.getsockname()[0]}:{sock.getsockname()[1]}")
+    
     try:
-        async with server:
-            await server.serve_forever()
+        # Create tasks for both server and shutdown monitoring
+        server_task = asyncio.create_task(server.serve_forever())
+        shutdown_task = asyncio.create_task(_shutdown_event.wait())
+        
+        # Wait for either server to stop or shutdown event
+        done, pending = await asyncio.wait(
+            {server_task, shutdown_task},
+            return_when=asyncio.FIRST_COMPLETED
+        )
+        
+        # Cancel any pending tasks
+        for task in pending:
+            task.cancel()
+            
     except asyncio.CancelledError:
-        print("Server shutdown initiated.")
+        pass
     finally:
+        print("\nShutting down server...")
+        server.close()
+        await server.wait_closed()
         _server = None
+        print("Server shutdown complete.")
 
 if __name__ == '__main__':
     import argparse
