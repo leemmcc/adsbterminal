@@ -263,7 +263,9 @@ async def shell(speed, reader, writer):
         
         # If refresh_display is requested, re-detect terminal size
         if refresh_display:
-            print("Re-detecting terminal size...")
+            # Suppress debug output during refresh to avoid display corruption
+            if config.get('debug', False):
+                print("Re-detecting terminal size...")
             # Try NAWS first
             new_width = writer.get_extra_info('columns')
             new_height = writer.get_extra_info('lines')
@@ -271,10 +273,12 @@ async def shell(speed, reader, writer):
             if new_width and new_height:
                 terminal_width = new_width
                 terminal_height = new_height
-                print(f"Detected size via NAWS: {terminal_width}x{terminal_height}")
+                if config.get('debug', False):
+                    print(f"Detected size via NAWS: {terminal_width}x{terminal_height}")
             else:
                 # NAWS failed, try cursor position query
-                print("NAWS failed, trying cursor position query...")
+                if config.get('debug', False):
+                    print("NAWS failed, trying cursor position query...")
                 # We need to pause the reader task temporarily
                 rtask.cancel()
                 await asyncio.sleep(0.1)
@@ -283,7 +287,8 @@ async def shell(speed, reader, writer):
                 if detected_width and detected_height:
                     terminal_width = detected_width
                     terminal_height = detected_height
-                    print(f"Detected size via cursor query: {terminal_width}x{terminal_height}")
+                    if config.get('debug', False):
+                        print(f"Detected size via cursor query: {terminal_width}x{terminal_height}")
                 
                 # Restart the reader task
                 rtask = asyncio.create_task(reader_task(reader, input_queue))
@@ -299,8 +304,14 @@ async def shell(speed, reader, writer):
             # Restore session display mode reference
             renderer.session_display_mode = session_display_mode
             
+            # Clear screen and reset cursor
+            writer.write("\x1b[2J\x1b[1;1H\x1b[?25l")
+            await writer.drain()
+            
             # Clear trails as part of refresh
             clear_trails = True
+            # Force immediate update after refresh
+            force_update.set()
         
         # If we need to clear trails (including on initial load)
         if clear_trails:
