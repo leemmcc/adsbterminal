@@ -14,6 +14,12 @@ from main import ADSBRadarApp
 from adsb_api import fetch_aircraft_near_airport, ADSBApiClient, AIRPORTS, calculate_bounds_from_point
 from config import PROCESSING_CONFIG, DISPLAY_CONFIG
 
+# Try to import asyncssh TerminalSizeChanged exception if available
+try:
+    from asyncssh import TerminalSizeChanged
+except ImportError:
+    TerminalSizeChanged = None
+
 # Load config file at module level
 with open('config.yaml', 'r') as file:
     config = yaml.safe_load(file)
@@ -68,9 +74,24 @@ async def reader_task(reader, queue):
             await queue.put(None)  # Signal EOF
             break
         except Exception as e:
-            print(f"Reader task error: {e}")
-            await queue.put(None)  # Signal EOF
-            break
+            # Check if this is a terminal size change exception from asyncssh
+            # AsyncSSH raises TerminalSizeChanged when the terminal is resized
+            if TerminalSizeChanged and isinstance(e, TerminalSizeChanged):
+                # This is expected during resize, just continue reading
+                if config.get('debug', False):
+                    print(f"Terminal resized during read (caught TerminalSizeChanged): {e}")
+                continue
+            elif ("Terminal size change" in str(e) or 
+                  "TerminalSizeChanged" in type(e).__name__ or
+                  "window change" in str(e).lower()):
+                # Fallback string matching for cases where we couldn't import the exception
+                if config.get('debug', False):
+                    print(f"Terminal resized during read (string match): {e}")
+                continue
+            else:
+                print(f"Reader task error: {e}")
+                await queue.put(None)  # Signal EOF
+                break
 
 async def handle_input(queue, app, on_reset, force_update, session_display_mode):
     """Handles user input from the queue."""
