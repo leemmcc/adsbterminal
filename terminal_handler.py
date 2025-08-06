@@ -489,14 +489,12 @@ async def handle_terminal_session(reader, writer, speed, peername, protocol='tel
             # Check for terminal resize
             try:
                 if check_terminal_resize():
-                    # If telnet resized, trigger a full refresh
+                    # If telnet resized, trigger the same refresh as manual 'r' key
                     if protocol == 'telnet' and telnet_resize_pending[0]:
                         telnet_resize_pending[0] = False
-                        print("Performing telnet resize refresh...")
-                        # Schedule the refresh as a background task
-                        async def do_resize_refresh():
-                            await reset_aircraft(clear_trails=False, refresh_display=True)
-                        asyncio.create_task(do_resize_refresh())
+                        print("Telnet terminal resized - refreshing display, re-detecting terminal size, and clearing trails...")
+                        # Call the exact same refresh function that 'r' key uses
+                        await reset_aircraft(clear_trails=True, refresh_display=True)
             except Exception as e:
                 if config.get('debug', False):
                     print(f"Error during terminal resize check: {e}")
