@@ -268,9 +268,10 @@ async def handle_terminal_session(reader, writer, speed, peername, protocol='tel
             renderer = ASCIIRenderer()
             renderer.session_display_mode = session_display_mode
             
-            # For telnet, clear screen and force complete redraw after resize
+            # For telnet, clear and trigger redraw after resize
             if protocol == 'telnet':
                 try:
+                    # Clear the screen immediately
                     writer.write("\x1b[2J\x1b[1;1H")
                     asyncio.create_task(writer.drain())
                 except Exception as e:
@@ -449,10 +450,10 @@ async def handle_terminal_session(reader, writer, speed, peername, protocol='tel
     # This fixes display issues with initial terminal size detection
     if protocol == 'telnet':
         print("Performing initial telnet display refresh...")
-        # Clear screen and force complete redraw
-        writer.write("\x1b[2J\x1b[1;1H")
-        await writer.drain()
-        force_update.set()
+        # Trigger a full refresh cycle
+        await reset_aircraft(clear_trails=True, refresh_display=True)
+        # Give the refresh a moment to complete
+        await asyncio.sleep(0.2)
     
     last_data_update = time.time()
     last_keepalive = time.time()
