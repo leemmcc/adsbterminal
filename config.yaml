@@ -1,7 +1,8 @@
 speed: 100
 demomode: false  # Set to false for live data, true for demo
 interval: 5
-port: 8023
+port: 8023       # Telnet server port
+ssh_port: 8025   # SSH server port
 
 # Live mode settings
 airport: RDU  # Airport code (RDU, CLT, ATL, DCA, JFK, LAX, ORD, DFW, DEN, SFO)

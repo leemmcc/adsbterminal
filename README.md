@@ -36,7 +36,9 @@ Try the demo mode first to see how it works:
 python main.py --demo
 ```
 
-### Telnet Server Mode
+### Server Modes
+
+#### Telnet Server Mode
 
 Run as a telnet server to allow remote connections:
 
@@ -49,7 +51,32 @@ Then connect from any telnet client:
 telnet localhost 8023
 ```
 
-#### Telnet Server Hotkeys
+#### SSH Server Mode
+
+Run as an SSH server for secure connections:
+
+```bash
+python ssh_server.py
+```
+
+Then connect via SSH (accepts any username/password):
+```bash
+ssh -p 8025 guest@localhost
+```
+
+#### Combined Server Mode (Recommended)
+
+Run both telnet and SSH servers simultaneously:
+
+```bash
+python combined_server.py
+```
+
+This starts both servers:
+- Telnet on port 8023: `telnet localhost 8023`
+- SSH on port 8025: `ssh -p 8025 guest@localhost`
+
+#### Server Hotkeys
 - `r` - Refresh display and clear trails
 - `t` - Toggle display mode (cycles through: all → closest → high → medium → low)
 - `q` - Quit current session
@@ -88,7 +115,13 @@ python main.py --interval 2
 
 ## Configuration
 
-Edit `config.py` to customize settings for your local area and preferences.
+Edit `config.yaml` to customize settings:
+- Server ports (telnet and SSH)
+- Demo mode on/off
+- Airport location and search radius
+- Display options (colors, symbols, trail length)
+- Terminal size overrides
+- Update intervals and speed
 
 ## Telnet Server Approach
 
@@ -114,7 +147,12 @@ The Telnet server mode allows remote connections to view and interact with the A
 - `main.py`: Application entry point and command-line interface
 - `adsb_data.py`: ADS-B data fetching and aircraft tracking
 - `ascii_renderer.py`: ASCII art rendering and display
-- `config.py`: Configuration settings
+- `terminal_handler.py`: Shared terminal session handler for both telnet and SSH
+- `telnet_server.py`: Telnet server implementation
+- `ssh_server.py`: SSH server implementation with anonymous access
+- `combined_server.py`: Runs both telnet and SSH servers simultaneously
+- `config.yaml`: Configuration file for all settings
+- `config.py`: Configuration constants and defaults
 
 ## License
 
