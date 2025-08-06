@@ -1,158 +1,142 @@
-# ADS-B ASCII Art Radar
+# ADS-B Terminal Radar
 
-A Python application that displays aircraft tracking data from ADS-B sources as ASCII art in your terminal. Perfect for aviation enthusiasts who want a retro radar display!
+A remote-accessible terminal-based aircraft radar display that serves real-time ADS-B tracking data via Telnet and SSH. Connect from anywhere to view live aircraft positions in a retro ASCII art interface.
+
+**Note:** This is a proof-of-concept project that demonstrates remote terminal-based ADS-B visualization. While functional, it's not intended for production use and likely won't receive significant updates beyond its current state.
 
 ## Features
 
-- 🛩️ Real-time aircraft tracking from ADS-B sources
-- 🎨 Multiple ASCII art styles (simple, detailed, classic)
+- 🌐 **Remote Access**: Connect via Telnet (port 8023) or SSH (port 8025)
+- 🛩️ Real-time aircraft tracking from ADS-B Exchange API
+- 📡 Airport-centric view with configurable radius
+- 🎨 ASCII art radar display with aircraft symbols
 - 🌈 Color-coded aircraft by altitude
 - 🛤️ Aircraft trail visualization
-- 📊 Live aircraft information display
-- 🎮 Demo mode with simulated aircraft
-- ⚙️ Configurable display bounds and settings
+- 📊 Live aircraft information panel
+- 🎮 Demo mode with simulated aircraft for testing
+- 🖥️ Automatic terminal size detection and resize handling
+- ⚙️ Fully configurable via YAML
 
-## Installation
+## Quick Start
 
 ### Prerequisites
 
 - Python 3.7 or higher
-- An ADS-B data source (dump1090, RTL1090, Virtual Radar Server, etc.)
+- Internet connection (for ADS-B Exchange API)
 
-### Install Dependencies
+### Installation
 
 ```bash
-cd adsb-ascii-art
+git clone https://github.com/leemmcc/adsbterminal
+cd adsbterminal
 pip install -r requirements.txt
 ```
 
-## Usage
+## Remote Access Setup
 
-### Demo Mode (No ADS-B Required)
+### Running the Server
 
-Try the demo mode first to see how it works:
-
-```bash
-python main.py --demo
-```
-
-### Server Modes
-
-#### Telnet Server Mode
-
-Run as a telnet server to allow remote connections:
-
-```bash
-python telnet_server.py
-```
-
-Then connect from any telnet client:
-```bash
-telnet localhost 8023
-```
-
-#### SSH Server Mode
-
-Run as an SSH server for secure connections:
-
-```bash
-python ssh_server.py
-```
-
-Then connect via SSH (accepts any username/password):
-```bash
-ssh -p 8025 guest@localhost
-```
-
-#### Combined Server Mode (Recommended)
-
-Run both telnet and SSH servers simultaneously:
+The recommended way to run the server is using the combined mode, which starts both Telnet and SSH servers:
 
 ```bash
 python combined_server.py
 ```
 
-This starts both servers:
-- Telnet on port 8023: `telnet localhost 8023`
-- SSH on port 8025: `ssh -p 8025 guest@localhost`
+This starts:
+- **Telnet server on port 8023** - Simple, no authentication required
+- **SSH server on port 8025** - Secure, accepts any username/password
 
-#### Server Hotkeys
-- `r` - Refresh display and clear trails
-- `t` - Toggle display mode (cycles through: all → closest → high → medium → low)
-- `q` - Quit current session
-- `x` or `s` - Shutdown the server completely
+### Connecting to the Server
 
-### Live Mode with ADS-B Data
-
-If you have dump1090 or another ADS-B source running:
-
+#### Via Telnet (Simple)
 ```bash
-# Default (assumes dump1090 on localhost:8080)
-python main.py
-
-# Custom data source
-python main.py --url http://your-pi:8080/data/aircraft.json
-
-# Custom map bounds (lat_min,lon_min,lat_max,lon_max)
-python main.py --bounds 40.5,-74.5,41.5,-73.5
-
-# Different ASCII style
-python main.py --style detailed
-
-# Faster updates
-python main.py --interval 2
+telnet your-server-ip 8023
 ```
 
-### Command Line Options
+#### Via SSH (Secure)
+```bash
+ssh -p 8025 anyuser@your-server-ip
+# Password: anything (authentication is not enforced)
+```
 
-- `--demo`: Run in demo mode with simulated aircraft
-- `--style {simple,detailed,classic}`: Choose ASCII art style
-- `--bounds LAT_MIN,LON_MIN,LAT_MAX,LON_MAX`: Set map display bounds
-- `--url URL`: Specify ADS-B data source URL
-- `--interval N`: Update interval in seconds (default: 5)
-- `--verbose`: Enable detailed logging
-- `--help`: Show help message
+### Remote Access Features
+
+- **Automatic Terminal Size Detection**: The display adapts to your terminal size
+- **Terminal Resize Support**: Resize your terminal window and press 'r' to refresh
+- **Multi-client Support**: Multiple users can connect simultaneously
+- **Session Persistence**: Each session maintains its own display settings
+- **Low Bandwidth**: Uses efficient terminal control codes
+
+### Interactive Controls
+
+Once connected, use these keyboard commands:
+
+- `r` - **Refresh display**: Re-detects terminal size and clears trails
+- `t` - **Toggle display mode**: Cycles through different views
+  - `all` - Show all aircraft in range
+  - `closest` - Show only the 5 nearest aircraft
+  - `high` - Aircraft above 25,000 feet
+  - `medium` - Aircraft between 10,000-25,000 feet  
+  - `low` - Aircraft below 10,000 feet
+- `q` - **Quit session**: Disconnect from server
+
 
 ## Configuration
 
-Edit `config.yaml` to customize settings:
-- Server ports (telnet and SSH)
-- Demo mode on/off
-- Airport location and search radius
-- Display options (colors, symbols, trail length)
-- Terminal size overrides
-- Update intervals and speed
+Edit `config.yaml` to customize your setup:
 
-## Telnet Server Approach
+```yaml
+# Server Configuration
+telnet_port: 8023        # Telnet server port
+ssh_port: 8025           # SSH server port
 
-The Telnet server mode allows remote connections to view and interact with the ASCII radar display. This mode is ideal for shared and remote environments.
+# Display Configuration  
+airport: 'RDU'           # Airport code (RDU, JFK, LAX, ORD, ATL, DFW, DEN, SEA, SFO, BOS, IAD, CLT, LAS, PHX, MIA)
+radius: 25               # Search radius in nautical miles
+demomode: false          # Set to true for simulated aircraft
 
-### Features
+# Terminal Settings
+terminal_width: null     # Auto-detect if null, or set fixed width
+terminal_height: null    # Auto-detect if null, or set fixed height
+use_colors: true         # Enable/disable colors
+use_unicode_symbols: false  # Use Unicode aircraft symbols
 
-- Start the server using `python telnet_server.py`.
-- Connect using any telnet client at `telnet localhost 8023`.
-- Control display with hotkeys:
-  - `r`: Refresh the display and clear trails.
-  - `t`: Toggle display mode - cycles through:
-    - **all**: Show all aircraft
-    - **closest**: Show only the 10 closest aircraft to the airport
-    - **high**: Show only aircraft above 25,000 feet
-    - **medium**: Show only aircraft between 10,000-25,000 feet
-    - **low**: Show only aircraft below 10,000 feet
-  - `q`: Quit current session.
-  - `x` or `s`: Shutdown the server completely.
+# Update Settings
+interval: 1              # Data refresh interval in seconds
+trail_length: 15         # Number of trail points to show
+```
 
-## Architecture
+## Demo Mode
 
-- `main.py`: Application entry point and command-line interface
-- `adsb_data.py`: ADS-B data fetching and aircraft tracking
-- `ascii_renderer.py`: ASCII art rendering and display
-- `terminal_handler.py`: Shared terminal session handler for both telnet and SSH
-- `telnet_server.py`: Telnet server implementation
-- `ssh_server.py`: SSH server implementation with anonymous access
-- `combined_server.py`: Runs both telnet and SSH servers simultaneously
-- `config.yaml`: Configuration file for all settings
-- `config.py`: Configuration constants and defaults
+To test without live data, enable demo mode in `config.yaml`:
+
+```yaml
+demomode: true
+```
+
+This simulates aircraft movements around your configured airport for testing and demonstration purposes.
+
+## Technical Details
+
+### Data Source
+The application fetches live aircraft data from the ADS-B Exchange API, which provides global coverage of ADS-B equipped aircraft.
+
+### Terminal Compatibility
+- Works with any ANSI-compatible terminal
+- Tested with: PuTTY, Windows Terminal, macOS Terminal, iTerm2, Linux terminals
+- Minimum recommended terminal size: 80x24
+- Optimal terminal size: 120x40 or larger
+
+### Network Requirements
+- Outbound HTTPS to api.adsb.lol for aircraft data
+- Inbound TCP ports 8023 (Telnet) and 8025 (SSH) for client connections
+
+## Known Limitations
+
+- SSH terminal resize on some clients may require manual refresh (press 'r')
+- Telnet connections are unencrypted - use SSH for secure connections
+- API rate limits may apply for very frequent updates
+- Aircraft data accuracy depends on ADS-B coverage in your selected area
 
 ## License
 
@@ -160,8 +144,8 @@ MIT License - feel free to modify and distribute!
 
 ---
 
-## Development Philosophy
+## Development Notes
 
-This project was developed with an AI-assisted "vibe coding" approach, allowing for creative and unconventional solutions. AI played a significant role in code suggestions and overall development style.
+This project was created as a proof-of-concept to demonstrate remote terminal-based ADS-B visualization. It was developed with an AI-assisted approach, exploring creative solutions for terminal rendering and remote access. While functional and fun to use, it's not intended for mission-critical applications.
 
-**Happy plane spotting!** ✈️📡
+**Happy plane spotting from anywhere!** ✈️📡
