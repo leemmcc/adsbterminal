@@ -192,12 +192,20 @@ async def handle_terminal_session(reader, writer, speed, peername, protocol='tel
         
         if protocol == 'telnet':
             # telnetlib3 handles NAWS negotiation automatically
+            # Give NAWS more time to negotiate
             await writer.drain()
-            await asyncio.sleep(0.1)
-            if hasattr(writer, 'get_extra_info') and writer.get_extra_info('columns'):
-                terminal_width = writer.get_extra_info('columns')
-                terminal_height = writer.get_extra_info('lines')
-                print(f"Detected size via NAWS: {terminal_width}x{terminal_height}")
+            await asyncio.sleep(0.5)  # Increased delay for NAWS negotiation
+            
+            # Try multiple times to get the size
+            for attempt in range(3):
+                if hasattr(writer, 'get_extra_info'):
+                    terminal_width = writer.get_extra_info('columns')
+                    terminal_height = writer.get_extra_info('lines')
+                    if terminal_width and terminal_height:
+                        print(f"Detected size via NAWS (attempt {attempt+1}): {terminal_width}x{terminal_height}")
+                        break
+                if attempt < 2:
+                    await asyncio.sleep(0.2)  # Wait a bit more between attempts
         elif protocol == 'ssh':
             # For SSH, try to get terminal size from the SSH session
             if hasattr(writer, 'get_terminal_size'):
@@ -236,6 +244,9 @@ async def handle_terminal_session(reader, writer, speed, peername, protocol='tel
         'display_aircraft_limit': config.get('display_aircraft_limit', 5)
     })
     
+    # Variables to track resize state for telnet
+    telnet_resize_pending = [False]  # Use list to allow modification in nested function
+    
     # Function to check for terminal resize
     def check_terminal_resize():
         nonlocal terminal_width, terminal_height, renderer
@@ -268,15 +279,10 @@ async def handle_terminal_session(reader, writer, speed, peername, protocol='tel
             renderer = ASCIIRenderer()
             renderer.session_display_mode = session_display_mode
             
-            # For telnet, clear and trigger redraw after resize
+            # For telnet, mark that we need to do a full refresh
             if protocol == 'telnet':
-                try:
-                    # Clear the screen immediately
-                    writer.write("\x1b[2J\x1b[1;1H")
-                    asyncio.create_task(writer.drain())
-                except Exception as e:
-                    if config.get('debug', False):
-                        print(f"Error clearing screen after resize: {e}")
+                telnet_resize_pending[0] = True
+                print("Telnet resize detected, refresh pending...")
             
             force_update.set()
             return True
@@ -482,7 +488,15 @@ async def handle_terminal_session(reader, writer, speed, peername, protocol='tel
             
             # Check for terminal resize
             try:
-                check_terminal_resize()
+                if check_terminal_resize():
+                    # If telnet resized, trigger a full refresh
+                    if protocol == 'telnet' and telnet_resize_pending[0]:
+                        telnet_resize_pending[0] = False
+                        print("Performing telnet resize refresh...")
+                        # Schedule the refresh as a background task
+                        async def do_resize_refresh():
+                            await reset_aircraft(clear_trails=False, refresh_display=True)
+                        asyncio.create_task(do_resize_refresh())
             except Exception as e:
                 if config.get('debug', False):
                     print(f"Error during terminal resize check: {e}")
