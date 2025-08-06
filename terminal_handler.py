@@ -226,7 +226,10 @@ async def handle_terminal_session(reader, writer, speed, peername, protocol='tel
         elif protocol == 'ssh' and hasattr(writer, 'get_terminal_size'):
             try:
                 new_width, new_height = writer.get_terminal_size()
-            except:
+            except Exception as e:
+                # SSH resize might fail if terminal is resizing
+                if config.get('debug', False):
+                    print(f"SSH resize detection error: {e}")
                 pass
         
         if new_width and new_height and (new_width != terminal_width or new_height != terminal_height):
@@ -438,7 +441,12 @@ async def handle_terminal_session(reader, writer, speed, peername, protocol='tel
                     break
             
             # Check for terminal resize
-            check_terminal_resize()
+            try:
+                check_terminal_resize()
+            except Exception as e:
+                if config.get('debug', False):
+                    print(f"Error during terminal resize check: {e}")
+                # Continue running even if resize detection fails
             
             # In live mode, periodically refresh data
             current_time = time.time()
@@ -446,7 +454,13 @@ async def handle_terminal_session(reader, writer, speed, peername, protocol='tel
                 await reset_aircraft()
                 last_data_update = current_time
             
-            writer.write("\x1b[H")
+            try:
+                writer.write("\x1b[H")
+            except Exception as e:
+                if config.get('debug', False):
+                    print(f"Error writing cursor home: {e}")
+                # Connection might be broken, exit gracefully
+                break
             
             # Animate or display current aircraft
             current_aircraft = aircraft_ref['data']
@@ -499,12 +513,18 @@ async def handle_terminal_session(reader, writer, speed, peername, protocol='tel
                 display_output = renderer.render_to_string([], show_info=True, airport_info=airport_display_info)
             
             lines = display_output.split('\n')
-            for i, line in enumerate(lines):
-                output_line = process_colored_line(line, terminal_width, config.get('use_colors', True))
-                if i == len(lines) - 1 and not line:
-                    continue
-                writer.write(output_line)
-            await writer.drain()
+            try:
+                for i, line in enumerate(lines):
+                    output_line = process_colored_line(line, terminal_width, config.get('use_colors', True))
+                    if i == len(lines) - 1 and not line:
+                        continue
+                    writer.write(output_line)
+                await writer.drain()
+            except Exception as e:
+                if config.get('debug', False):
+                    print(f"Error writing display output: {e}")
+                # Connection might be broken during resize
+                break
 
             # Check for force update or sleep
             if force_update.is_set():
