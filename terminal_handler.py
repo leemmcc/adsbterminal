@@ -268,6 +268,15 @@ async def handle_terminal_session(reader, writer, speed, peername, protocol='tel
             renderer = ASCIIRenderer()
             renderer.session_display_mode = session_display_mode
             
+            # For telnet, clear screen and force complete redraw after resize
+            if protocol == 'telnet':
+                try:
+                    writer.write("\x1b[2J\x1b[1;1H")
+                    asyncio.create_task(writer.drain())
+                except Exception as e:
+                    if config.get('debug', False):
+                        print(f"Error clearing screen after resize: {e}")
+            
             force_update.set()
             return True
         return False
@@ -435,6 +444,15 @@ async def handle_terminal_session(reader, writer, speed, peername, protocol='tel
     
     # Give the terminal a moment to stabilize
     await asyncio.sleep(0.5)
+    
+    # For telnet, force a display refresh after initial connection
+    # This fixes display issues with initial terminal size detection
+    if protocol == 'telnet':
+        print("Performing initial telnet display refresh...")
+        # Clear screen and force complete redraw
+        writer.write("\x1b[2J\x1b[1;1H")
+        await writer.drain()
+        force_update.set()
     
     last_data_update = time.time()
     last_keepalive = time.time()
